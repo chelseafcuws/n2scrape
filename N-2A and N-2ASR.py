@@ -4,6 +4,8 @@ from bs4 import BeautifulSoup
 import pandas as pd
 from io import StringIO
 
+
+# Getting the N-2/A Form-type table.
 param = {
     'company': '',
     'CIK': '',
@@ -31,7 +33,11 @@ header = {
 }
 resp = requests.get('https://www.sec.gov/cgi-bin/browse-edgar', params=param, headers=header)
 soup = BeautifulSoup(resp.content, 'html.parser')
+
+# Converting the html table into the pandas df
 df = pd.read_html(StringIO(str(soup.find_all('table')[-2])))[0]
+
+# Getting the N-2ASR Form-type table.
 param = {
     'company': '',
     'CIK': '',
@@ -42,37 +48,54 @@ param = {
 }
 resp = requests.get('https://www.sec.gov/cgi-bin/browse-edgar', params=param, headers=header)
 soup = BeautifulSoup(resp.content, 'html.parser')
+
+# Converting the html table into the pandas df
 df2 = pd.read_html(StringIO(str(soup.find_all('table')[-2])))[0]
 
 Fund = []
 CIK = []
+
+# Getting the Fund and CIK from the Description Column
 for i in json.loads(df[df['Form'].isna()].to_json(orient='records')):
     Fund.append(i['Description'].split(' (')[0].strip())
     CIK.append(i['Description'].split(' (')[1].replace(')',''))
+
+# Filtering the Form column for non empty values
 df = df[df['Form'].notna()].copy()
 df['CIK'] = CIK
 df['Fund'] = Fund
-df['Accession number'] = df['Description'].str.split(':').str[1].str.strip().str.split().str[0]
+
+# Getting the AccessionNumber and Act from Description.
+df['AccessionNumber'] = df['Description'].str.split(':').str[1].str.strip().str.split().str[0]
 df['Act'] = df['Description'].str.split(':').str[2].str.strip().str.split().str[0]
-df = df[['CIK', 'Fund', 'Form', 'Act', 'Filing Date', 'Accession number']]
+df = df[['CIK', 'Fund', 'Form', 'Act', 'Filing Date', 'AccessionNumber']]
+df = df.rename(columns={'Filing Date': 'FilingDate'})
 
 df2 = pd.DataFrame()
 Fund = []
 CIK = []
 try:
+    # Getting the Fund and CIK from the Description Column
     for i in json.loads(df2[df2['Form'].isna()].to_json(orient='records')):
         Fund.append(i['Description'].split(' (')[0].strip())
         CIK.append(i['Description'].split(' (')[1].replace(')',''))
+    
+    # Filtering the Form column for non empty values
     df2 = df2[df2['Form'].notna()].copy()
     df2['CIK'] = CIK
     df2['Fund'] = Fund
-    df2['Accession number'] = df2['Description'].str.split(':').str[1].str.strip().str.split().str[0]
+
+    # Getting the AccessionNumber and Act from Description.
+    df2['AccessionNumber'] = df2['Description'].str.split(':').str[1].str.strip().str.split().str[0]
     df2['Act'] = df2['Description'].str.split(':').str[2].str.strip().str.split().str[0]
-    df2 = df2[['CIK', 'Fund', 'Form', 'Act', 'Filing Date', 'Accession number']]
+    df2 = df2[['CIK', 'Fund', 'Form', 'Act', 'Filing Date', 'AccessionNumber']]
+    df2 = df2.rename(columns={'Filing Date': 'FilingDate'})
 except:pass
 
+
+# Concatenating the N-2/A and N-2ASR dfs
 df3 = pd.concat([df, df2])
-df3['Filing Date'] = pd.to_datetime(df['Filing Date'])
-df3['Filing Date'] = df3['Filing Date'].dt.strftime('%m/%d/%Y')
+df3['FilingDate'] = pd.to_datetime(df['FilingDate'])
+df3['FilingDate'] = df3['FilingDate'].dt.strftime('%m/%d/%Y')
 
 df3.to_excel('N-2A and N-2ASR.xlsx', index=False)
